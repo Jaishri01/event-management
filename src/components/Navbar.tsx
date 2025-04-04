@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import supabase from '@/lib/supabase';
+import supabase, { isConfigValid } from '@/lib/supabase';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -9,35 +9,43 @@ const Navbar = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for current user session
-    const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+    // Only check for user session if Supabase is properly configured
+    if (isConfigValid) {
+      // Check for current user session
+      const checkUser = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          setUser(session?.user || null);
+        } catch (error) {
+          console.error('Error checking authentication status:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      checkUser();
+
+      // Listen for auth changes
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
         setUser(session?.user || null);
-      } catch (error) {
-        console.error('Error checking authentication status:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
 
-    checkUser();
-
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-    });
-
-    return () => {
-      // Clean up subscription
-      authListener.subscription.unsubscribe();
-    };
+      return () => {
+        // Clean up subscription
+        authListener.subscription.unsubscribe();
+      };
+    } else {
+      // If Supabase is not configured, we're not loading
+      setLoading(false);
+    }
   }, []);
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
-      navigate('/auth');
+      if (isConfigValid) {
+        await supabase.auth.signOut();
+        navigate('/auth');
+      }
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -58,7 +66,7 @@ const Navbar = () => {
               >
                 Events
               </Link>
-              {user && (
+              {isConfigValid && user && (
                 <Link
                   to="/admin"
                   className="border-transparent text-gray-500 hover:border-primary hover:text-primary inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
@@ -71,7 +79,7 @@ const Navbar = () => {
           <div className="flex items-center">
             {loading ? (
               <div className="text-sm text-gray-500">Loading...</div>
-            ) : user ? (
+            ) : isConfigValid && user ? (
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-700">
                   Hi, {user.user_metadata?.username || user.email}
