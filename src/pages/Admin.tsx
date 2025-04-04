@@ -2,67 +2,63 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import supabase from '@/lib/supabase';
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from 'react-router-dom';
+import type { Database } from '@/integrations/supabase/types';
 
-interface Event {
-  id?: number;
-  name: string;
-  date: string;
-  location: string;
-  description: string;
-  maxAttendees: number;
-  currentAttendees: number;
-  imageUrl: string;
-}
+type Event = Database['public']['Tables']['events']['Row'];
 
 const Admin = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [formData, setFormData] = useState<Event>({
+  const [formData, setFormData] = useState<Omit<Event, 'id' | 'created_at' | 'updated_at' | 'created_by' | 'current_attendees'>>({
     name: '',
     date: '',
     location: '',
     description: '',
-    maxAttendees: 0,
-    currentAttendees: 0,
-    imageUrl: ''
+    max_attendees: 0,
+    image_url: ''
   });
   const [isEditing, setIsEditing] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [user, setUser] = useState<any>(null);
 
-  // Placeholder fetch events function - will be replaced with Supabase
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login to access the admin panel.",
+          variant: "destructive"
+        });
+        navigate('/auth');
+        return;
+      }
+      setUser(data.session.user);
+    };
+
+    checkAuth();
+  }, [navigate, toast]);
+
   useEffect(() => {
     const fetchEvents = async () => {
+      if (!user) return;
+      
       try {
-        // In a real app, this would fetch from Supabase
-        // const { data, error } = await supabase.from('events').select('*');
+        const { data, error } = await supabase
+          .from('events')
+          .select('*')
+          .eq('created_by', user.id)
+          .order('date', { ascending: false });
+          
+        if (error) throw error;
         
-        // Placeholder data until Supabase is fully connected
-        setEvents([
-          {
-            id: 1,
-            name: "Tech Conference 2025",
-            date: "2025-05-15T09:00:00",
-            location: "San Francisco Convention Center",
-            description: "Annual tech conference featuring the latest innovations and industry leaders.",
-            maxAttendees: 200,
-            currentAttendees: 120,
-            imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8ZXZlbnR8ZW58MHx8MHx8fDA%3D"
-          },
-          {
-            id: 2,
-            name: "Music Festival",
-            date: "2025-06-20T16:00:00",
-            location: "Central Park",
-            description: "A weekend of amazing music performances from top artists.",
-            maxAttendees: 500,
-            currentAttendees: 350,
-            imageUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8Y29uY2VydHxlbnwwfHwwfHx8MA%3D%3D"
-          }
-        ]);
+        setEvents(data || []);
       } catch (error) {
         console.error('Error fetching events:', error);
         toast({
@@ -75,14 +71,16 @@ const Admin = () => {
       }
     };
 
-    fetchEvents();
-  }, [toast]);
+    if (user) {
+      fetchEvents();
+    }
+  }, [user, toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'maxAttendees' ? parseInt(value) || 0 : value
+      [name]: name === 'max_attendees' ? parseInt(value) || 0 : value
     }));
   };
 
@@ -93,7 +91,14 @@ const Admin = () => {
 
   const handleSelectEvent = (event: Event) => {
     setSelectedEvent(event);
-    setFormData(event);
+    setFormData({
+      name: event.name,
+      date: new Date(event.date).toISOString().slice(0, 16),
+      location: event.location,
+      description: event.description,
+      max_attendees: event.max_attendees,
+      image_url: event.image_url || ''
+    });
     setIsEditing(true);
   };
 
@@ -104,9 +109,8 @@ const Admin = () => {
       date: '',
       location: '',
       description: '',
-      maxAttendees: 0,
-      currentAttendees: 0,
-      imageUrl: ''
+      max_attendees: 0,
+      image_url: ''
     });
     setIsEditing(true);
   };
@@ -120,40 +124,77 @@ const Admin = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+    
     setLoading(true);
 
     try {
-      let imageUrl = formData.imageUrl;
+      let imageUrl = formData.image_url;
 
       // Handle image upload if a new file is selected
       if (imageFile) {
-        // In a real app, this would upload to Supabase Storage
-        // For now, let's use a placeholder URL
-        imageUrl = URL.createObjectURL(imageFile);
+        setUploadProgress(10);
         
-        // Simulate upload progress
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += 10;
-          setUploadProgress(progress);
-          if (progress >= 100) {
-            clearInterval(interval);
-          }
-        }, 300);
+        // Upload the image to Supabase Storage
+        const fileExt = imageFile.name.split('.').pop();
+        const filePath = `event-images/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { error: uploadError, data } = await supabase.storage
+          .from('event-images')
+          .upload(filePath, imageFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+          
+        if (uploadError) throw uploadError;
+        
+        setUploadProgress(70);
+        
+        // Get the public URL for the uploaded image
+        const { data: { publicUrl } } = supabase.storage
+          .from('event-images')
+          .getPublicUrl(filePath);
+          
+        imageUrl = publicUrl;
+        
+        setUploadProgress(100);
       }
 
+      // Format the date to ISO format for Supabase
+      const formattedDate = new Date(formData.date).toISOString();
+      
       // Create or update event
-      const updatedEvent = {
-        ...formData,
-        imageUrl,
-      };
-
       if (selectedEvent?.id) {
         // Update existing event
-        // In a real app: await supabase.from('events').update(updatedEvent).eq('id', selectedEvent.id);
+        const { error } = await supabase
+          .from('events')
+          .update({
+            name: formData.name,
+            date: formattedDate,
+            location: formData.location,
+            description: formData.description,
+            max_attendees: formData.max_attendees,
+            image_url: imageUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedEvent.id);
+          
+        if (error) throw error;
         
+        // Update local state
         setEvents(events.map(event => 
-          event.id === selectedEvent.id ? { ...updatedEvent, id: selectedEvent.id } : event
+          event.id === selectedEvent.id 
+            ? { 
+                ...event, 
+                name: formData.name,
+                date: formattedDate,
+                location: formData.location,
+                description: formData.description,
+                max_attendees: formData.max_attendees,
+                image_url: imageUrl,
+                updated_at: new Date().toISOString()
+              } 
+            : event
         ));
         
         toast({
@@ -162,14 +203,26 @@ const Admin = () => {
         });
       } else {
         // Create new event
-        // In a real app: const { data } = await supabase.from('events').insert(updatedEvent).select();
+        const { data, error } = await supabase
+          .from('events')
+          .insert({
+            name: formData.name,
+            date: formattedDate,
+            location: formData.location,
+            description: formData.description,
+            max_attendees: formData.max_attendees,
+            image_url: imageUrl,
+            created_by: user.id,
+            current_attendees: 0
+          })
+          .select();
+          
+        if (error) throw error;
         
-        const newEvent = {
-          ...updatedEvent,
-          id: Math.max(0, ...events.map(e => e.id || 0)) + 1,
-        };
-        
-        setEvents([...events, newEvent]);
+        // Update local state with the newly created event
+        if (data && data[0]) {
+          setEvents([data[0], ...events]);
+        }
         
         toast({
           title: "Success!",
@@ -180,6 +233,7 @@ const Admin = () => {
       // Reset form
       handleCancel();
     } catch (error: any) {
+      console.error('Error saving event:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to save event.",
@@ -191,16 +245,20 @@ const Admin = () => {
     }
   };
 
-  const handleDelete = async (id: number | undefined) => {
-    if (!id) return;
-    
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this event?')) return;
     
     setLoading(true);
     
     try {
-      // In a real app: await supabase.from('events').delete().eq('id', id);
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
       
+      // Update local state
       setEvents(events.filter(event => event.id !== id));
       
       toast({
@@ -212,6 +270,7 @@ const Admin = () => {
         handleCancel();
       }
     } catch (error: any) {
+      console.error('Error deleting event:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete event.",
@@ -221,6 +280,15 @@ const Admin = () => {
       setLoading(false);
     }
   };
+
+  // Check if user is loading or not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -232,7 +300,7 @@ const Admin = () => {
           <div className="lg:col-span-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Events</CardTitle>
+                <CardTitle>Your Events</CardTitle>
                 <button
                   onClick={handleCreateNew}
                   className="py-2 px-4 bg-primary text-white rounded-md hover:bg-primary/80 transition-colors"
@@ -355,31 +423,16 @@ const Admin = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <label htmlFor="maxAttendees" className="text-sm font-medium">
+                      <label htmlFor="max_attendees" className="text-sm font-medium">
                         Maximum Attendee Limit *
                       </label>
                       <input
-                        id="maxAttendees"
-                        name="maxAttendees"
+                        id="max_attendees"
+                        name="max_attendees"
                         type="number"
                         required
                         min="1"
-                        value={formData.maxAttendees}
-                        onChange={handleInputChange}
-                        className="w-full p-2 border rounded-md"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="currentAttendees" className="text-sm font-medium">
-                        Current Attendees Count
-                      </label>
-                      <input
-                        id="currentAttendees"
-                        name="currentAttendees"
-                        type="number"
-                        min="0"
-                        value={formData.currentAttendees}
+                        value={formData.max_attendees}
                         onChange={handleInputChange}
                         className="w-full p-2 border rounded-md"
                       />
@@ -407,11 +460,11 @@ const Admin = () => {
                         </div>
                       )}
                       
-                      {(imageFile || formData.imageUrl) && (
+                      {(imageFile || formData.image_url) && (
                         <div className="mt-2">
                           <p className="text-sm font-medium mb-1">Preview:</p>
                           <img 
-                            src={imageFile ? URL.createObjectURL(imageFile) : formData.imageUrl} 
+                            src={imageFile ? URL.createObjectURL(imageFile) : formData.image_url} 
                             alt="Event preview" 
                             className="w-full max-h-40 object-cover rounded-md" 
                           />

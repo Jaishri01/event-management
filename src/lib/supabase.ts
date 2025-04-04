@@ -1,23 +1,15 @@
 
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/integrations/supabase/types';
 
-// Try to get environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use the client from src/integrations/supabase/client.ts
+import { supabase as integrationClient } from '@/integrations/supabase/client';
 
-// For development only - remove these in production
-const devFallbackUrl = 'https://your-project.supabase.co';
-const devFallbackKey = 'your-anon-key';
+// Export the properly configured client 
+const supabase = integrationClient;
 
-// Use environment variables if available, otherwise use fallbacks for development
-const url = supabaseUrl || devFallbackUrl;
-const key = supabaseAnonKey || devFallbackKey;
-
-// Check if we have valid configuration
-const isConfigValid = url !== 'https://your-project.supabase.co' && key !== 'your-anon-key';
-
-// Create Supabase client with the configuration
-const supabase = createClient(url, key);
+// Check if we have valid configuration (for UI feedback)
+const isConfigValid = true;
 
 // Export client and configuration status
 export { isConfigValid };

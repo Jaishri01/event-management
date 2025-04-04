@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import supabase from '@/lib/supabase';
+import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
   const { toast } = useToast();
@@ -17,6 +17,18 @@ const Auth = () => {
     username: '',
     phoneNumber: ''
   });
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate('/');
+      }
+    };
+    
+    checkSession();
+  }, [navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -60,6 +72,12 @@ const Auth = () => {
         toast({
           title: "Success!",
           description: "Registration successful! Please check your email for confirmation.",
+        });
+        
+        // For development purposes, let the user know they might want to disable email confirmation
+        toast({
+          title: "Dev Note",
+          description: "For testing, you may want to disable email confirmation in Supabase Auth settings.",
         });
       }
     } catch (error: any) {
@@ -144,7 +162,6 @@ const Auth = () => {
                     id="phoneNumber"
                     name="phoneNumber"
                     type="tel"
-                    required
                     value={formData.phoneNumber}
                     onChange={handleChange}
                     className="w-full p-2 border rounded-md"
