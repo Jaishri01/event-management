@@ -12,5 +12,5 @@ const supabase = integrationClient;
 const isConfigValid = true;
 
 // Export client and configuration status
-export { isConfigValid };
+export { isConfigValid, supabase };
 export default supabase;

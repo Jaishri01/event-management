@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useNavigate } from 'react-router-dom';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -131,11 +130,9 @@ const Admin = () => {
     try {
       let imageUrl = formData.image_url;
 
-      // Handle image upload if a new file is selected
       if (imageFile) {
         setUploadProgress(10);
         
-        // Upload the image to Supabase Storage
         const fileExt = imageFile.name.split('.').pop();
         const filePath = `event-images/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
         
@@ -150,7 +147,6 @@ const Admin = () => {
         
         setUploadProgress(70);
         
-        // Get the public URL for the uploaded image
         const { data: { publicUrl } } = supabase.storage
           .from('event-images')
           .getPublicUrl(filePath);
@@ -160,12 +156,9 @@ const Admin = () => {
         setUploadProgress(100);
       }
 
-      // Format the date to ISO format for Supabase
       const formattedDate = new Date(formData.date).toISOString();
       
-      // Create or update event
       if (selectedEvent?.id) {
-        // Update existing event
         const { error } = await supabase
           .from('events')
           .update({
@@ -181,7 +174,6 @@ const Admin = () => {
           
         if (error) throw error;
         
-        // Update local state
         setEvents(events.map(event => 
           event.id === selectedEvent.id 
             ? { 
@@ -202,7 +194,6 @@ const Admin = () => {
           description: "Event updated successfully.",
         });
       } else {
-        // Create new event
         const { data, error } = await supabase
           .from('events')
           .insert({
@@ -219,7 +210,6 @@ const Admin = () => {
           
         if (error) throw error;
         
-        // Update local state with the newly created event
         if (data && data[0]) {
           setEvents([data[0], ...events]);
         }
@@ -230,7 +220,6 @@ const Admin = () => {
         });
       }
 
-      // Reset form
       handleCancel();
     } catch (error: any) {
       console.error('Error saving event:', error);
@@ -258,7 +247,6 @@ const Admin = () => {
         
       if (error) throw error;
       
-      // Update local state
       setEvents(events.filter(event => event.id !== id));
       
       toast({
@@ -281,7 +269,6 @@ const Admin = () => {
     }
   };
 
-  // Check if user is loading or not authenticated
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center">
@@ -296,7 +283,6 @@ const Admin = () => {
         <h1 className="text-3xl font-bold text-center mb-8 mt-4">Event Management</h1>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Event List */}
           <div className="lg:col-span-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -348,7 +334,6 @@ const Admin = () => {
             </Card>
           </div>
           
-          {/* Event Form */}
           <div className="lg:col-span-7">
             <Card>
               <CardHeader>
