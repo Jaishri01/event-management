@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Auth = () => {
   const { toast } = useToast();
@@ -11,6 +13,7 @@ const Auth = () => {
   
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -37,6 +40,7 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setRateLimitError(null);
 
     try {
       if (isLogin) {
@@ -67,7 +71,14 @@ const Auth = () => {
           }
         });
 
-        if (error) throw error;
+        if (error) {
+          // Check for rate limit errors
+          if (error.message.includes("For security purposes, you can only request this after")) {
+            setRateLimitError(error.message);
+            throw error;
+          }
+          throw error;
+        }
 
         toast({
           title: "Success!",
@@ -81,11 +92,16 @@ const Auth = () => {
         });
       }
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "An error occurred during authentication.",
-        variant: "destructive"
-      });
+      // Check if it's a rate limit error
+      if (error.message.includes("For security purposes, you can only request this after")) {
+        setRateLimitError(error.message);
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "An error occurred during authentication.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -103,6 +119,17 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {rateLimitError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Rate Limit Exceeded</AlertTitle>
+              <AlertDescription>
+                {rateLimitError}
+                <p className="mt-2">Please wait and try again later.</p>
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
@@ -173,7 +200,7 @@ const Auth = () => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !!rateLimitError}
               className="w-full py-2 bg-primary text-white rounded-md hover:bg-primary/80 transition-colors disabled:opacity-70"
             >
               {loading ? 'Processing...' : isLogin ? 'Login' : 'Sign Up'}
@@ -183,7 +210,10 @@ const Auth = () => {
           <div className="mt-4 text-center">
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setRateLimitError(null);
+              }}
               className="text-sm text-primary hover:underline"
             >
               {isLogin ? "Don't have an account? Sign up" : "Already have an account? Login"}
