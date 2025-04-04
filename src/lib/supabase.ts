@@ -9,7 +9,11 @@ import { supabase as integrationClient } from '@/integrations/supabase/client';
 const supabase = integrationClient;
 
 // Check if we have valid configuration (for UI feedback)
-const isConfigValid = true;
+const isConfigValid = Boolean(
+  supabase && 
+  typeof supabase.storage !== 'undefined' &&
+  typeof supabase.auth !== 'undefined'
+);
 
 // Export client and configuration status
 export { isConfigValid, supabase };
