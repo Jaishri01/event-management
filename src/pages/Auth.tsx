@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,12 +82,6 @@ const Auth = () => {
         toast({
           title: "Success!",
           description: "Registration successful! Please check your email for confirmation.",
-        });
-        
-        // For development purposes, let the user know they might want to disable email confirmation
-        toast({
-          title: "Dev Note",
-          description: "For testing, you may want to disable email confirmation in Supabase Auth settings.",
         });
       }
     } catch (error: any) {
